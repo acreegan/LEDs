@@ -30,6 +30,8 @@
 #define BLUEHUE uint16_t((240./360) * 65535)
 #define MAGENTAHUE uint16_t((300./360) * 65535)
 
+#define PI 3.14159265358979323846
+
 Adafruit_NeoPixel strip(LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800);
 IRrecv irrecv(IR_PIN);
 uint16_t command;
@@ -88,6 +90,17 @@ class LedFader {
     }
 
     private:
+    float sinTimeMapper(float time) {
+        return 0.5+0.5*sin(PI*time-PI/2);
+
+        // Step time mapper:
+        // if (time >=0.5) {
+        //     return 1;
+        // } else {
+        //     return 0;
+        // }
+    }
+
     void incrementList(){
         // Go up then back down color list
         if (nextIndex > currentIndex) {
@@ -116,7 +129,10 @@ class LedFader {
     void fadeLEDs(){
         HSVColor startColor = colorList[currentIndex];
         HSVColor targetColor = colorList[nextIndex];
-        HSVColor color = gradient(startColor, targetColor, elapsedTime/fadeTime);
+        float time = sinTimeMapper(elapsedTime/fadeTime);
+        // float time = elapsedTime/fadeTime;
+        Serial.println(time);
+        HSVColor color = gradient(startColor, targetColor, time);
         strip.fill(strip.gamma32(strip.ColorHSV(color.hue, color.saturation, color.value)));
         strip.show();
     }
@@ -170,8 +186,8 @@ bool intervalDelay(int interval) {
     }
 }
 
-HSVColor fadeCyan[2] = {{32768, 255, 1}, {32768, 255, 255}};
-HSVColor fadeMagenta[2] = {{54613, 255, 1}, {54613, 255, 255}};
+HSVColor fadeCyan[2] = {{32768, 255, 30}, {32768, 255, 255}};
+HSVColor fadeMagenta[2] = {{54613, 255, 30}, {54613, 255, 255}};
 HSVColor multiColorFade[7] = {{REDHUE, 255, 150}, 
                               {ORANGEHUE, 255, 150}, 
                               {YELLOWHUE, 255, 150}, 
