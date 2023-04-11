@@ -5,7 +5,6 @@
 #define LED_PIN 6
 #define LED_COUNT 12
 
-
 // IR remote control settings
 #define IR_PIN 2
 
@@ -22,14 +21,8 @@
 #define FADE_MULTI 0x43
 #define OFF 0x19
 
-
 Adafruit_NeoPixel strip(LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800);
 IRrecv irrecv(IR_PIN);
-
-unsigned long previousMillis = 0;
-int brightness = 1;
-int fadeDirection = 1;
-
 uint16_t command;
 
 struct HSVColor {
@@ -44,45 +37,36 @@ class LedFader {
     int colorListLength;
     int delayInterval;
     float fadeTime;
-    LedFader(HSVColor* colorList, int colorListLength, int fadeTime = 2550, int delayInterval=10) 
-             :colorList(colorList), colorListLength(colorListLength), 
-             fadeTime(fadeTime), delayInterval(delayInterval) {}
+    float holdTime;
 
-    void fadeLEDs(){
+    LedFader(HSVColor* colorList, int colorListLength, int fadeTime = 2000, 
+            int holdTime = 0, int delayInterval=10) 
+             :colorList(colorList), colorListLength(colorListLength), fadeTime(fadeTime), 
+             holdTime(holdTime), delayInterval(delayInterval) {
+                reset();
+             }
+
+    void update() {
         if (intervalDelay()) {
-            unsigned long elapsedTime = millis() - stateStart;
-            HSVColor startColor = colorList[currentIndex];
-            HSVColor targetColor = colorList[nextIndex];
-            HSVColor color = gradient(startColor, targetColor, elapsedTime/fadeTime);
-            strip.fill(strip.gamma32(strip.ColorHSV(color.hue, color.saturation, color.value)));
-            strip.show();
-
-            // Update color index
-            if (elapsedTime >= fadeTime) {
-
-                // Go up then back down color list
-                if (nextIndex > currentIndex) {
-                    // Going up
-                    if (nextIndex == colorListLength-1) {
-                        // Reached the top
-                        currentIndex = nextIndex;
-                        nextIndex--;
-                    } else {
-                        currentIndex = nextIndex;
-                        nextIndex ++;
-                    }
-                } else {
-                    // Going down
-                    if (nextIndex == 0) {
-                        // Reached the bottom
-                        currentIndex = nextIndex;
-                        nextIndex++;
-                    } else {
-                        currentIndex = nextIndex;
-                        nextIndex --;
-                    }
+            elapsedTime = millis() - stateStart;
+            switch(state){
+            case Fade:
+                fadeLEDs();
+                if (elapsedTime >= fadeTime) {
+                    incrementList();
+                    state=Hold;
+                    stateStart = millis();
                 }
-                stateStart = millis();
+                break;
+            case Hold:
+                HSVColor color = colorList[currentIndex];
+                strip.fill(strip.gamma32(strip.ColorHSV(color.hue, color.saturation, color.value)));
+                strip.show();
+                if (elapsedTime >= holdTime) {
+                    state=Fade;
+                    stateStart=millis();
+                }                
+                break;
             }
         }
     }
@@ -90,10 +74,48 @@ class LedFader {
     void reset(){
         currentIndex = 0;
         nextIndex = 1;
+        state=Hold;
         stateStart = millis();
     }
 
     private:
+    void incrementList(){
+        // Go up then back down color list
+        if (nextIndex > currentIndex) {
+            // Going up
+            if (nextIndex == colorListLength-1) {
+                // Reached the top
+                currentIndex = nextIndex;
+                nextIndex--;
+            } else {
+                currentIndex = nextIndex;
+                nextIndex ++;
+            }
+        } else {
+            // Going down
+            if (nextIndex == 0) {
+                // Reached the bottom
+                currentIndex = nextIndex;
+                nextIndex++;
+            } else {
+                currentIndex = nextIndex;
+                nextIndex --;
+            }
+        }
+    }
+
+    void fadeLEDs(){
+        HSVColor startColor = colorList[currentIndex];
+        HSVColor targetColor = colorList[nextIndex];
+        HSVColor color = gradient(startColor, targetColor, elapsedTime/fadeTime);
+        strip.fill(strip.gamma32(strip.ColorHSV(color.hue, color.saturation, color.value)));
+        strip.show();
+    }
+
+    enum State {
+        Fade,
+        Hold
+    };
     // Calculate a point between two brightnesses
     HSVColor gradient(HSVColor startColor, HSVColor targetColor, float proportion) {
 
@@ -121,9 +143,11 @@ class LedFader {
         }
     }
 
-    int currentIndex = 0;
-    int nextIndex = 1;
-    unsigned long stateStart = 0;
+    LedFader::State state;
+    int currentIndex;
+    int nextIndex;
+    unsigned long stateStart;
+    unsigned long elapsedTime;
 };
 
 bool intervalDelay(int interval) {
@@ -141,9 +165,9 @@ HSVColor fadeCyan[2] = {{32768, 255, 1}, {32768, 255, 255}};
 HSVColor fadeMagenta[2] = {{54613, 255, 1}, {54613, 255, 255}};
 HSVColor multiColorFade[3] = {{0, 255, 150}, {8000, 255, 150}, {30000, 255, 150}};
 
-LedFader cyanFader(fadeCyan,2);
-LedFader magentaFader(fadeMagenta,2);
-LedFader multiColorFader(multiColorFade, 3);
+LedFader cyanFader(fadeCyan,2, 2000, 0);
+LedFader magentaFader(fadeMagenta,2, 2000, 0);
+LedFader multiColorFader(multiColorFade, 3, 2000, 3000);
 
 void setup() {
   strip.begin();
@@ -216,13 +240,13 @@ void loop() {
     }
     break;
   case FADE_MAGENTA:
-    magentaFader.fadeLEDs();
+    magentaFader.update();
     break;
   case FADE_CYAN:
-    cyanFader.fadeLEDs();
+    cyanFader.update();
     break;
   case FADE_MULTI:
-    multiColorFader.fadeLEDs();
+    multiColorFader.update();
     break;
   default:
     break;
