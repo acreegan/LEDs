@@ -21,6 +21,15 @@
 #define FADE_MULTI 0x43
 #define OFF 0x19
 
+// Colors
+#define REDHUE uint16_t((0./360) * 65535)
+#define ORANGEHUE uint16_t((30./360) * 65535)
+#define YELLOWHUE uint16_t((60./360) * 65535)
+#define GREENHUE uint16_t((120./360) * 65535)
+#define CYANHUE uint16_t((180./360) * 65535)
+#define BLUEHUE uint16_t((240./360) * 65535)
+#define MAGENTAHUE uint16_t((300./360) * 65535)
+
 Adafruit_NeoPixel strip(LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800);
 IRrecv irrecv(IR_PIN);
 uint16_t command;
@@ -163,11 +172,17 @@ bool intervalDelay(int interval) {
 
 HSVColor fadeCyan[2] = {{32768, 255, 1}, {32768, 255, 255}};
 HSVColor fadeMagenta[2] = {{54613, 255, 1}, {54613, 255, 255}};
-HSVColor multiColorFade[3] = {{0, 255, 150}, {8000, 255, 150}, {30000, 255, 150}};
+HSVColor multiColorFade[7] = {{REDHUE, 255, 150}, 
+                              {ORANGEHUE, 255, 150}, 
+                              {YELLOWHUE, 255, 150}, 
+                              {GREENHUE, 255, 150}, 
+                              {CYANHUE, 255, 150}, 
+                              {BLUEHUE, 255, 150}, 
+                              {MAGENTAHUE, 255, 150}};
 
 LedFader cyanFader(fadeCyan,2, 2000, 0);
 LedFader magentaFader(fadeMagenta,2, 2000, 0);
-LedFader multiColorFader(multiColorFade, 3, 2000, 3000);
+LedFader multiColorFader(multiColorFade, 7, 2000, 3000);
 
 void setup() {
   strip.begin();
