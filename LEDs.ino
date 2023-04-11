@@ -19,6 +19,7 @@
 #define BLUE 0x47
 #define FADE_MAGENTA 0x44
 #define FADE_CYAN 0x40
+#define FADE_MULTI 0x43
 #define OFF 0x19
 
 
@@ -31,42 +32,83 @@ int fadeDirection = 1;
 
 uint16_t command;
 
+struct HSVColor {
+    uint16_t hue;
+    uint8_t saturation;
+    uint8_t value;
+};
+
 class LedFader {
     public:
-    int hue;
-    int saturation;
+    HSVColor* colorList;
+    int colorListLength;
     int delayInterval;
     float fadeTime;
-    LedFader(int hue = 0, int saturation = 255, int fadeTime = 2550, int delayInterval=10) 
-             :hue(hue), saturation(saturation), fadeTime(fadeTime), delayInterval(delayInterval) {}
+    LedFader(HSVColor* colorList, int colorListLength, int fadeTime = 2550, int delayInterval=10) 
+             :colorList(colorList), colorListLength(colorListLength), 
+             fadeTime(fadeTime), delayInterval(delayInterval) {}
 
     void fadeLEDs(){
         if (intervalDelay()) {
-            unsigned long elapsedTime = millis() - fadeStart;
-            int sourceBrightness = brightnessList[currentBrightnessIndex];
-            int targetBrightness = brightnessList[nextBrightnessIndex];
-            int brightness = gradient(sourceBrightness, targetBrightness, elapsedTime/fadeTime);
-            strip.fill(strip.gamma32(strip.ColorHSV(hue, saturation, brightness)));
+            unsigned long elapsedTime = millis() - stateStart;
+            HSVColor startColor = colorList[currentIndex];
+            HSVColor targetColor = colorList[nextIndex];
+            HSVColor color = gradient(startColor, targetColor, elapsedTime/fadeTime);
+            strip.fill(strip.gamma32(strip.ColorHSV(color.hue, color.saturation, color.value)));
             strip.show();
 
+            // Update color index
             if (elapsedTime >= fadeTime) {
-                currentBrightnessIndex = nextBrightnessIndex;
-                nextBrightnessIndex = (nextBrightnessIndex+1) % (sizeof(brightnessList)/sizeof(brightnessList[0]));
-                fadeStart = millis();
+
+                // Go up then back down color list
+                if (nextIndex > currentIndex) {
+                    // Going up
+                    if (nextIndex == colorListLength-1) {
+                        // Reached the top
+                        currentIndex = nextIndex;
+                        nextIndex--;
+                    } else {
+                        currentIndex = nextIndex;
+                        nextIndex ++;
+                    }
+                } else {
+                    // Going down
+                    if (nextIndex == 0) {
+                        // Reached the bottom
+                        currentIndex = nextIndex;
+                        nextIndex++;
+                    } else {
+                        currentIndex = nextIndex;
+                        nextIndex --;
+                    }
+                }
+                stateStart = millis();
             }
         }
     }
 
     void reset(){
-        currentBrightnessIndex = 0;
-        nextBrightnessIndex = 1;
-        fadeStart = millis();
+        currentIndex = 0;
+        nextIndex = 1;
+        stateStart = millis();
     }
 
     private:
     // Calculate a point between two brightnesses
-    int gradient(int sourceBrightness, int targetBrightness, float proportion) {
-        return sourceBrightness + int((targetBrightness-sourceBrightness)*proportion);
+    HSVColor gradient(HSVColor startColor, HSVColor targetColor, float proportion) {
+
+        uint16_t hue;
+        if (targetColor.hue - startColor.hue < startColor.hue - targetColor.hue) {
+            hue = startColor.hue + int((targetColor.hue-startColor.hue)*proportion);
+        } else {
+            hue = startColor.hue - int((startColor.hue-targetColor.hue)*proportion);
+        }   
+        int saturation = startColor.saturation + int((targetColor.saturation-startColor.saturation)*proportion);
+        int brightness = startColor.value + int((targetColor.value-startColor.value)*proportion);
+
+        HSVColor color = {hue, saturation, brightness};
+
+        return color;
     }
     bool intervalDelay() {
         unsigned long currentMillis = millis();
@@ -78,10 +120,10 @@ class LedFader {
             return false;
         }
     }
-    int brightnessList[2] = {1, 255};
-    int currentBrightnessIndex = 0;
-    int nextBrightnessIndex = 1;
-    unsigned long fadeStart = 0;
+
+    int currentIndex = 0;
+    int nextIndex = 1;
+    unsigned long stateStart = 0;
 };
 
 bool intervalDelay(int interval) {
@@ -95,8 +137,13 @@ bool intervalDelay(int interval) {
     }
 }
 
-LedFader cyanFader(32768);
-LedFader magentaFader(54613);
+HSVColor fadeCyan[2] = {{32768, 255, 1}, {32768, 255, 255}};
+HSVColor fadeMagenta[2] = {{54613, 255, 1}, {54613, 255, 255}};
+HSVColor multiColorFade[3] = {{0, 255, 150}, {8000, 255, 150}, {30000, 255, 150}};
+
+LedFader cyanFader(fadeCyan,2);
+LedFader magentaFader(fadeMagenta,2);
+LedFader multiColorFader(multiColorFade, 3);
 
 void setup() {
   strip.begin();
@@ -130,6 +177,10 @@ void loop() {
     case FADE_CYAN:
         command = FADE_CYAN;
         cyanFader.reset();
+        break;
+    case FADE_MULTI:
+        command = FADE_MULTI;
+        multiColorFader.reset();
         break;
     case OFF:
         command = OFF;
@@ -169,6 +220,10 @@ void loop() {
     break;
   case FADE_CYAN:
     cyanFader.fadeLEDs();
+    break;
+  case FADE_MULTI:
+    multiColorFader.fadeLEDs();
+    break;
   default:
     break;
   }
