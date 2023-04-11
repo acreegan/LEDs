@@ -9,7 +9,6 @@
 // IR remote control settings
 #define IR_PIN 2
 
-
 // Fading settings
 #define FADE_STEP 1
 #define FADE_INTERVAL 10 // in milliseconds
@@ -37,25 +36,38 @@ class LedFader {
     int hue;
     int saturation;
     int delayInterval;
-    LedFader(int hue = 0, int saturation = 255, int delayInterval = 10) 
-             :hue(hue), saturation(saturation), delayInterval(delayInterval) {}
+    float fadeTime;
+    LedFader(int hue = 0, int saturation = 255, int fadeTime = 2550, int delayInterval=10) 
+             :hue(hue), saturation(saturation), fadeTime(fadeTime), delayInterval(delayInterval) {}
 
     void fadeLEDs(){
         if (intervalDelay()) {
+            unsigned long elapsedTime = millis() - fadeStart;
+            int sourceBrightness = brightnessList[currentBrightnessIndex];
+            int targetBrightness = brightnessList[nextBrightnessIndex];
+            int brightness = gradient(sourceBrightness, targetBrightness, elapsedTime/fadeTime);
             strip.fill(strip.gamma32(strip.ColorHSV(hue, saturation, brightness)));
             strip.show();
-            brightness += FADE_STEP * fadeDirection;
-            if (brightness <= 1 || brightness >= 255) {
-            fadeDirection = -fadeDirection;
+
+            if (elapsedTime >= fadeTime) {
+                currentBrightnessIndex = nextBrightnessIndex;
+                nextBrightnessIndex = (nextBrightnessIndex+1) % (sizeof(brightnessList)/sizeof(brightnessList[0]));
+                fadeStart = millis();
             }
         }
     }
 
     void reset(){
-        brightness = 1;
+        currentBrightnessIndex = 0;
+        nextBrightnessIndex = 1;
+        fadeStart = millis();
     }
 
     private:
+    // Calculate a point between two brightnesses
+    int gradient(int sourceBrightness, int targetBrightness, float proportion) {
+        return sourceBrightness + int((targetBrightness-sourceBrightness)*proportion);
+    }
     bool intervalDelay() {
         unsigned long currentMillis = millis();
         static unsigned long previousMillis = 0;
@@ -66,8 +78,10 @@ class LedFader {
             return false;
         }
     }
-    int brightness = 1;
-    int fadeDirection = 1;
+    int brightnessList[2] = {1, 255};
+    int currentBrightnessIndex = 0;
+    int nextBrightnessIndex = 1;
+    unsigned long fadeStart = 0;
 };
 
 bool intervalDelay(int interval) {
